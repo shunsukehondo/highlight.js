@@ -1,0 +1,115 @@
+<span class="hljs-keyword">pragma</span> solidity <span class="hljs-number">0.4</span><span class="hljs-number">.24</span>;
+
+
+<span class="hljs-keyword">import</span> <span class="hljs-string">"contracts/Owned.sol"</span>;
+<span class="hljs-keyword">import</span> <span class="hljs-string">"contracts/Proxyable.sol"</span>;
+
+
+<span class="hljs-function"><span class="hljs-keyword">contract</span> <span class="hljs-title">Proxy</span> <span class="hljs-keyword">is</span> <span class="hljs-title">Owned</span> </span>{
+
+    Proxyable <span class="hljs-keyword">public</span> target;
+    <span class="hljs-built_in">bool</span> <span class="hljs-keyword">public</span> useDELEGATECALL;
+
+    <span class="hljs-class"><span class="hljs-keyword">constructor</span>(<span class="hljs-params"><span class="hljs-built_in">address</span> _owner</span>)
+        <span class="hljs-title">Owned</span>(_owner)
+        public
+    </span>{}
+
+    <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">randomMathTest</span>(<span class="hljs-params"></span>) <span class="hljs-title">private</span> <span class="hljs-title">returns</span> (<span class="hljs-params"><span class="hljs-built_in">uint</span></span>) </span>{ 
+      <span class="hljs-built_in">uint</span> a = b / c; 
+      <span class="hljs-built_in">bytes32</span> = <span class="hljs-built_in">bytes32</span>(<span class="hljs-string">"0x32"</span>); 
+      <span class="hljs-keyword">return</span> <span class="hljs-number">7</span>;
+    } 
+
+    <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">setTarget</span>(<span class="hljs-params">Proxyable _target</span>)
+        <span class="hljs-title">external</span>
+        <span class="hljs-title">onlyOwner</span>
+    </span>{
+        target = _target;
+        <span class="hljs-function"><span class="hljs-keyword">emit</span> <span class="hljs-literal">TargetUpdated</span>(<span class="hljs-params">_target</span>)</span>;
+    }
+
+    <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">setUseDELEGATECALL</span>(<span class="hljs-params"><span class="hljs-built_in">bool</span> <span class="hljs-built_in">value</span></span>) 
+        <span class="hljs-title">external</span>
+        <span class="hljs-title">onlyOwner</span>
+    </span>{
+        useDELEGATECALL = <span class="hljs-built_in">value</span>;
+    }
+
+    <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">_emit</span>(<span class="hljs-params"><span class="hljs-built_in">bytes</span> callData, <span class="hljs-built_in">uint</span> numTopics,
+                   <span class="hljs-built_in">bytes32</span> topic1, <span class="hljs-built_in">bytes32</span> topic2,
+                   <span class="hljs-built_in">bytes32</span> topic3, <span class="hljs-built_in">bytes32</span> topic4</span>)
+        <span class="hljs-title">external</span>
+        <span class="hljs-title">onlyTarget</span>
+    </span>{
+        <span class="hljs-built_in">uint</span> size = callData.length;
+        <span class="hljs-built_in">bytes</span> <span class="hljs-keyword">memory</span> _callData = callData;
+
+        <span class="hljs-keyword">assembly</span> {
+            <span class="hljs-comment">/* The first 32 bytes of callData contain its length (as specified by the abi). 
+             * Length is assumed to be a uint256 and therefore maximum of 32 bytes
+             * in length. It is also leftpadded to be a multiple of 32 bytes.
+             * This means moving call_data across 32 bytes guarantees we correctly access
+             * the data itself. */</span>
+            <span class="hljs-keyword">switch</span> numTopics
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0</span> {
+                log0(add(_callData, <span class="hljs-number">32</span>), size)
+            } 
+            <span class="hljs-keyword">case</span> <span class="hljs-number">1</span> {
+                log1(add(_callData, <span class="hljs-number">32</span>), size, topic1)
+            }
+            <span class="hljs-keyword">case</span> <span class="hljs-number">2</span> {
+                log2(add(_callData, <span class="hljs-number">32</span>), size, topic1, topic2)
+            }
+            <span class="hljs-keyword">case</span> <span class="hljs-number">3</span> {
+                log3(add(_callData, <span class="hljs-number">32</span>), size, topic1, topic2, topic3)
+            }
+            <span class="hljs-keyword">case</span> <span class="hljs-number">4</span> {
+                log4(add(_callData, <span class="hljs-number">32</span>), size, topic1, topic2, topic3, topic4)
+            }
+        }
+    }
+
+    <span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>)
+        <span class="hljs-title">external</span>
+        <span class="hljs-title">payable</span>
+    </span>{
+        <span class="hljs-keyword">if</span> (useDELEGATECALL) {
+            <span class="hljs-keyword">assembly</span> {
+                <span class="hljs-comment">/* Copy call data into free memory region. */</span>
+                <span class="hljs-keyword">let</span> free_ptr := <span class="hljs-built_in">mload</span>(<span class="hljs-number">0x40</span>)
+                calldatacopy(free_ptr, <span class="hljs-number">0</span>, calldatasize)
+
+                <span class="hljs-comment">/* Forward all gas and call data to the target contract. */</span>
+                <span class="hljs-keyword">let</span> result := <span class="hljs-built_in">delegatecall</span>(gas, <span class="hljs-built_in">sload</span>(target_slot), free_ptr, calldatasize, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>)
+                <span class="hljs-built_in">returndatacopy</span>(free_ptr, <span class="hljs-number">0</span>, returndatasize)
+
+                <span class="hljs-comment">/* Revert if the call failed, otherwise return the result. */</span>
+                <span class="hljs-keyword">if</span> iszero(result) { <span class="hljs-built_in">revert</span>(free_ptr, returndatasize) }
+                <span class="hljs-keyword">return</span>(free_ptr, returndatasize)
+            }
+        } <span class="hljs-keyword">else</span> {
+            <span class="hljs-comment">/* Here we are as above, but must send the messageSender explicitly 
+             * since we are using CALL rather than DELEGATECALL. */</span>
+            target.setMessageSender(<span class="hljs-built_in">msg</span>.<span class="hljs-built_in">sender</span>);
+            <span class="hljs-keyword">assembly</span> {
+                <span class="hljs-keyword">let</span> free_ptr := <span class="hljs-built_in">mload</span>(<span class="hljs-number">0x40</span>)
+                calldatacopy(free_ptr, <span class="hljs-number">0</span>, calldatasize)
+
+                <span class="hljs-comment">/* We must explicitly forward ether to the underlying contract as well. */</span>
+                <span class="hljs-keyword">let</span> result := <span class="hljs-built_in">call</span>(gas, <span class="hljs-built_in">sload</span>(target_slot), callvalue, free_ptr, calldatasize, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>)
+                <span class="hljs-built_in">returndatacopy</span>(free_ptr, <span class="hljs-number">0</span>, returndatasize)
+
+                <span class="hljs-keyword">if</span> iszero(result) { <span class="hljs-built_in">revert</span>(free_ptr, returndatasize) }
+                <span class="hljs-keyword">return</span>(free_ptr, returndatasize)
+            }
+        }
+    }
+
+    <span class="hljs-keyword">modifier</span> onlyTarget {
+        <span class="hljs-built_in">require</span>(Proxyable(<span class="hljs-built_in">msg</span>.<span class="hljs-built_in">sender</span>) == target);
+        _;
+    }
+
+    <span class="hljs-class"><span class="hljs-keyword">event</span> <span class="hljs-literal">TargetUpdated</span>(<span class="hljs-params">Proxyable newTarget</span>)</span>;
+}
